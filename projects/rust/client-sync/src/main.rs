@@ -28,6 +28,25 @@ fn input(prompt: &str) -> io::Result<String> {
     Ok(line.trim_end_matches(['\r', '\n']).to_owned())
 }
 
+//读取echo的文本
+fn read_echo_text() -> io::Result<String> {
+    let mut line: Vec<String> = Vec::new();
+    loop {
+        //读取一行输入
+        let text = input("|")?;
+        if text == "." {
+            break;
+        }
+        //当以两个点结尾时，删除最后一个点
+        if text.ends_with("..") {
+            let_ = text.pop();
+        }
+        line.push(text);
+    }
+    Ok(line.join("\n"))
+}
+
+
 // Box<dyn Error> 让 main 可以用 ? 传播来自输入、HTTP 客户端等不同类型的错误。
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
