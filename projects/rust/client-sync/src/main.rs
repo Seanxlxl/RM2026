@@ -89,7 +89,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                 )
             }
-            "echo" | "delete-user" | "put" | "get" | "delete" => {
+
+            //echo的接入实现
+            "echo" => {
+                let text = read_echo_text()?;
+                body = json!({"text": text});
+                ("POST", "/echo")
+            }
+
+
+            "delete-user" | "put" | "get" | "delete" => {
                 // 起始代码尚未实现这些命令，所以不发送 HTTP 请求。
                 println!("This task is not implemented in the starting code yet.");
                 continue;
