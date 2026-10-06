@@ -116,8 +116,7 @@ fn times_out_when_server_does_not_respond() {
         .build()
         .unwrap();
 
-    let error = exchange(&client, &url, Method::GET, "/ping", "", None)
-        .unwrap_err();
+    let error = exchange(&client, &url, Method::GET, "/ping", "", None).unwrap_err();
 
     assert!(error.is_timeout(), "预期超时，实际错误：{error}");
     peer.join().unwrap();

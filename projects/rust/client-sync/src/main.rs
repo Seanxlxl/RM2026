@@ -119,9 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ("DELETE", dynamic_path.as_str())
             }
             //delete-user的实现
-            "delete-user"  => {
-                ("DELETE", "/users/me")
-            }
+            "delete-user" => ("DELETE", "/users/me"),
             _ => {
                 println!("Unknown command.");
                 continue;
@@ -143,7 +141,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 //echo和get的回显处理
                 if command == "echo" || command == "get" && status == 200 {
                     println!("HTTP {status}");
-                
                     if let Some(reply) = value["data"].as_str() {
                         print!("{reply}");
                         // 如果响应文本本身没有以换行结束，就另加一个换行，
@@ -171,7 +168,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Please log in again.");
                 }
                 // 当前实现收到任何 401 都会清空令牌；成功退出登录也会清空。
-                if status == 401 || (command == "logout" || command == "delete-user" && status == 200) {
+                if status == 401 
+                    || (command == "logout" || command == "delete-user" && status == 200) 
+                {
                     token.clear();
                 }
             }
