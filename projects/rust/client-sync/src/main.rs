@@ -118,10 +118,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 dynamic_path = format!("/texts/{name}");
                 ("DELETE", dynamic_path.as_str())
             }
+            //delete-user的实现
             "delete-user"  => {
-                // 起始代码尚未实现这些命令，所以不发送 HTTP 请求。
-                println!("This task is not implemented in the starting code yet.");
-                continue;
+                ("DELETE", "/users/me")
             }
             _ => {
                 println!("Unknown command.");
@@ -172,7 +171,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Please log in again.");
                 }
                 // 当前实现收到任何 401 都会清空令牌；成功退出登录也会清空。
-                if status == 401 || (command == "logout" && status == 200) {
+                if status == 401 || (command == "logout" || command == "delete-user" && status == 200) {
                     token.clear();
                 }
             }
