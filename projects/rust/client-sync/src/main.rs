@@ -103,7 +103,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ("PUT", format!("/texts/{name}"))
             }
             //get的接入实现
-
+            "get" => {
+                let name = input("name: ")?;
+                ("GET", format!("/texts/{name}"))
+            }
             "delete-user" | "delete" => {
                 // 起始代码尚未实现这些命令，所以不发送 HTTP 请求。
                 println!("This task is not implemented in the starting code yet.");
