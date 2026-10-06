@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 空字符串表示当前没有可用的登录令牌。
     let mut token = String::new();
 
-    //动态路径
+    //动态路径，用于后面调整path类型
     let mut dynamic_path: String;
     loop {
         // EOF 正常退出交互循环；其他输入错误交给 main 的调用者处理。
@@ -112,7 +112,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 dynamic_path = format!("/texts/{name}");
                 ("GET", dynamic_path.as_str())
             }
-            "delete-user" | "delete" => {
+            //delete的实现
+            "delete" => {
+                let name = input("name: ")?;
+                dynamic_path = format!("/texts/{name}");
+                ("DELETE", dynamic_path.as_str())
+            }
+            "delete-user"  => {
                 // 起始代码尚未实现这些命令，所以不发送 HTTP 请求。
                 println!("This task is not implemented in the starting code yet.");
                 continue;
@@ -122,6 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
+
         // 二进制入口调用库中的请求函数；固定的 GET/POST/DELETE 字符串可解析为 Method。
         // &token 是借用，exchange 读取令牌但不取得其所有权；无请求体时传 None。
         let result = rm_client_sync::exchange(
