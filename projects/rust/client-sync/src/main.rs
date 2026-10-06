@@ -89,16 +89,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                 )
             }
-
             //echo的接入实现
             "echo" => {
                 let text = read_echo_text()?;
                 body = json!({"text": text});
                 ("POST", "/echo")
             }
+            //put的实现,复用echo的读取文本函数
+            "put" => {
+                let name = input("name: ")?;
+                let text = read_echo_text()?;
+                body = json!({"text": text});
+                ("PUT", format!("/texts/{name}"))
+            }
+            //get的接入实现
 
-
-            "delete-user" | "put" | "get" | "delete" => {
+            "delete-user" | "delete" => {
                 // 起始代码尚未实现这些命令，所以不发送 HTTP 请求。
                 println!("This task is not implemented in the starting code yet.");
                 continue;
@@ -120,6 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         match result {
             Ok((status, value)) => {
+                //echo的回显处理
                 if command == "echo" && status == 200 {
                     println!("HTTP {status}");
                 
