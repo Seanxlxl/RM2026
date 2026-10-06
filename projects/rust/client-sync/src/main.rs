@@ -33,13 +33,13 @@ fn read_echo_text() -> io::Result<String> {
     let mut line: Vec<String> = Vec::new();
     loop {
         //读取一行输入
-        let text = input("|")?;
+        let mut text = input("|")?;
         if text == "." {
             break;
         }
         //当以两个点结尾时，删除最后一个点
         if text.ends_with("..") {
-            let_ = text.pop();
+            let _ = text.pop();
         }
         line.push(text);
     }
@@ -120,8 +120,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         match result {
             Ok((status, value)) => {
-                // 即使 HTTP 状态是 4xx/5xx，exchange 也会返回 Ok，先展示服务端响应。
-                println!("{status} {value}");
+                if command == "echo" && status == 200 {
+                    println!("HTTP {status}");
+                
+                    if let Some(reply) = value["data"].as_str() {
+                        print!("{reply}");
+                        // 如果响应文本本身没有以换行结束，就另加一个换行，
+                        // 让下一次命令提示符从新的一行开始。
+                        if !reply.ends_with('\n') {
+                            println!();
+                        }
+                    } else {
+                        // 响应格式不符合预期时，显示整个 JSON，方便排查。
+                        println!("{value}");
+                    }
+                } else {
+                    println!("{status} {value}");
+                }
                 // 仅在登录成功且响应中确实有字符串 token 时，更新本地令牌。
                 // JSON 索引缺失时会得到 Null，as_str() 随之返回 None。
                 if command == "login"
