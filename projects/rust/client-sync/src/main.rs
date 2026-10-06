@@ -60,6 +60,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     // 空字符串表示当前没有可用的登录令牌。
     let mut token = String::new();
+
+    //动态路径
+    let mut dynamic_path: String;
     loop {
         // EOF 正常退出交互循环；其他输入错误交给 main 的调用者处理。
         let command = match input(
@@ -100,12 +103,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let name = input("name: ")?;
                 let text = read_echo_text()?;
                 body = json!({"text": text});
-                ("PUT", format!("/texts/{name}"))
+                dynamic_path = format!("/texts/{name}");
+                ("PUT", dynamic_path.as_str())
             }
             //get的接入实现
             "get" => {
                 let name = input("name: ")?;
-                ("GET", format!("/texts/{name}"))
+                dynamic_path = format!("/texts/{name}");
+                ("GET", dynamic_path.as_str())
             }
             "delete-user" | "delete" => {
                 // 起始代码尚未实现这些命令，所以不发送 HTTP 请求。
@@ -129,8 +134,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         match result {
             Ok((status, value)) => {
-                //echo的回显处理
-                if command == "echo" && status == 200 {
+                //echo和get的回显处理
+                if command == "echo" || command == "get" && status == 200 {
                     println!("HTTP {status}");
                 
                     if let Some(reply) = value["data"].as_str() {
