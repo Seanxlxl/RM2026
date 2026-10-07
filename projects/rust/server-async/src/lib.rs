@@ -30,6 +30,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/echo"),
     ("PUT", "/texts/{name}"),
     ("GET", "/texts/{name}"),
+    ("DELETE", "/texts/{name}")
 ];
 
 /// None 表示方法和路径匹配；Some(状态码) 表示路由错误。
@@ -339,7 +340,13 @@ impl Service {
                     // 在锁保护下构造拥有正文数据的 JSON 响应。
                     return (200, json!({"data": text}));
                 }
+                if method =="DELETE"{
+                    if user.texts.remove(name).is_none() {
+                        return error(404, "Text not found");
+                    }
 
+                    return (200, json!({"data":null}));
+                }
             }
         }
         // 防御性兜底：路由表里声明了接口，却没有对应业务分支时返回 404。
