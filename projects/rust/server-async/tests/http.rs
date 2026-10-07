@@ -123,7 +123,12 @@ fn http_input_and_routing() {
     );
     // 未知路径为 404；已知路径用错误方法为 405。
     assert_eq!(client.get("/missing").dispatch().status(), Status::NotFound);
-    assert_eq!(client.get("/echo").dispatch().status(), Status::NotFound);
+    // /echo 已存在，但不支持 GET，因此应返回 405。
+    assert_eq!(
+        client.get("/echo").dispatch().status(),
+        Status::MethodNotAllowed
+    );
+    // /ping 已存在，但不支持 PATCH，因此应返回 405。
     assert_eq!(
         client.patch("/ping").dispatch().status(),
         Status::MethodNotAllowed
@@ -138,7 +143,6 @@ fn unimplemented_routes_are_absent() {
     // 这是起始状态测试：这些待实现接口现在返回 404。
     // 以后完成接口，要把此测试更新为验证新行为，而不是继续期待 404。
     for (method, path) in [
-        (Method::Post, "/echo"),
         (Method::Delete, "/users/me"),
         (Method::Put, "/texts/note"),
         (Method::Get, "/texts/note"),

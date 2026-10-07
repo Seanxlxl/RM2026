@@ -27,6 +27,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/sessions"),
     ("DELETE", "/sessions/current"),
     ("GET", "/texts"),
+    ("POST", "/echo"),
 ];
 
 /// None 表示方法和路径匹配；Some(状态码) 表示路由错误。
@@ -121,6 +122,25 @@ impl Service {
         if method == "GET" && path == "/ping" {
             return (200, json!({"data": "pong"}));
         }
+
+        //echo的实现
+        if method == "POST" && path == "/echo" {
+            //确认请求体必须为json对象
+            let Some(fields) = body.as_object() else {
+                return error(400, "Expected JSON object");
+            };
+            //确认text字段必须为字符串
+            let Some(text) = fields.get("text").and_then(Value::as_str) else {
+                return error(400, "Expected text");
+            };
+            //限制字数为65,536 字节
+            if text.len() > 65536 {
+                return error(400, "Text too long");
+            }
+            //返回请求体
+            return (200, json!({"data": text}));
+        }
+
         // 注册和登录复用字段校验；matches! 检查路径是否属于列出的任一项。
         if method == "POST" && matches!(path, "/users" | "/sessions") {
             // get 返回 Option；and_then 在有字段时继续检查它是否为字符串。
