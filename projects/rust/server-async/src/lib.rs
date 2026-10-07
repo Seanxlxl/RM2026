@@ -30,7 +30,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/echo"),
     ("PUT", "/texts/{name}"),
     ("GET", "/texts/{name}"),
-    ("DELETE", "/texts/{name}")
+    ("DELETE", "/texts/{name}"),
+    ("DELETE", "/users/me"),
 ];
 
 /// None 表示方法和路径匹配；Some(状态码) 表示路由错误。
@@ -259,7 +260,7 @@ impl Service {
         let requested_name = text_name(path);
         // 当前需要登录的两条路由；以后增加文本路由和注销时也须纳入鉴权。
         let protected = 
-            matches!(path, "/texts" | "/sessions/current")
+            matches!(path, "/texts" | "/sessions/current" | "/users/me")
                 || requested_name.is_some();
 
         if protected {
@@ -282,6 +283,13 @@ impl Service {
             let Some(name) = name else {
                 return error(401, "Login required");
             };
+            //注销功能
+            // 鉴权和删除使用同一个锁守卫，中间不能释放锁。
+            if method == "DELETE" && path == "/users/me" {
+                users.remove(&name);
+                return (200, json!({"data": null}));
+            }
+            
             // 刚才在同一把锁下找到了用户，所以这里一定存在。
             let user = users.get_mut(&name).unwrap();
             // 待完成：检查到期时间。鉴权和后续数据操作应始终在同一锁作用域内。
