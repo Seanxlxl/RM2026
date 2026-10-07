@@ -28,19 +28,53 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("DELETE", "/sessions/current"),
     ("GET", "/texts"),
     ("POST", "/echo"),
+    ("PUT", "/texts/{name}"),
+    ("GET", "/texts/{name}"),
 ];
 
 /// None 表示方法和路径匹配；Some(状态码) 表示路由错误。
 pub fn route_error(method: &str, path: &str) -> Option<u16> {
-    // iter 遍历而不取走数据；find 查找路径匹配的第一项，_ 忽略方法字段。
-    match ROUTES.iter().find(|(_, route)| *route == path) {
-        // 没有已知路径：404。
-        None => Some(404),
-        // 找到了路径，但方法不同：405。if 是这个匹配分支的额外条件。
-        Some((allowed, _)) if *allowed != method => Some(405),
-        // 找到了路径，而且方法正确：继续处理。
-        Some(_) => None,
+    // 把具体的文本路径转换成路由表中的统一表示。
+    let route_path = if text_name(path).is_some() {
+        "/texts/{name}"
+    } else {
+        path
+    };
+
+    // 没有任何路径匹配，返回 404。
+    let known_path = ROUTES
+        .iter()
+        .any(|(_, route)| *route == route_path);
+
+    if !known_path {
+        return Some(404);
     }
+
+    // 同时匹配路径和方法，避免只检查同路径的第一条记录。
+    let allowed = ROUTES
+        .iter()
+        .any(|(allowed_method, route)| {
+            *allowed_method == method && *route == route_path
+        });
+
+    if allowed {
+        None
+    } else {
+        Some(405)
+    }
+}
+
+//从文本中提取路径
+fn text_name(path: &str) -> Option<&str> {
+    let Some(name) = path.strip_prefix("/texts/") else {
+        return None;
+    };
+    // 名称只能占一个路径段，不能把 a/b 当作文本名称。
+    if name.contains('/') {
+        return None;
+    }
+
+    Some(name)
 }
 
 /// 一名用户的状态；用户名保存在 Service.users 的键中。
@@ -219,9 +253,21 @@ impl Service {
             // 待完成：记录令牌到期时间，并在成功响应中增加 expires_in。
             return (200, json!({"data": {"token": token}}));
         }
+
+        // 提取文本详情路径中的名称；列表、退出等路径得到 None。
+        let requested_name = text_name(path);
         // 当前需要登录的两条路由；以后增加文本路由和注销时也须纳入鉴权。
-        let protected = matches!(path, "/texts" | "/sessions/current");
+        let protected = 
+            matches!(path, "/texts" | "/sessions/current")
+                || requested_name.is_some();
+
         if protected {
+            // 名称校验不需要访问共享状态，可以在加锁前完成。
+            if let Some(name) = requested_name {
+                if !valid_name(name, 64) {
+                    return error(400, "Invalid text name");
+                }
+            }
             // 请求头格式为 Authorization: Bearer <token>；前缀不对就当作无令牌。
             let token = authorization.strip_prefix("Bearer ").unwrap_or("");
             let mut users = self.users.lock().unwrap();
@@ -249,6 +295,51 @@ impl Service {
                 // keys 只取文本名称；BTreeMap 保证升序，collect 收集成数组供 JSON 序列化。
                 // 注册时 texts 为空，且起始服务端还没有 PUT 路由，所以此处返回 []。
                 return (200, json!({"data": user.texts.keys().collect::<Vec<_>>()}));
+            }
+
+            //上传或读取当前用户的指定文本。
+            if let Some(name) = requested_name {
+                if method == "PUT" {
+                    // 上传请求体必须是 JSON 对象。
+                    let Some(fields) = body.as_object() else {
+                        return error(400, "Expected JSON object");
+                    };
+        
+                    // 只允许一个字段，并且这个字段必须是 text。
+                    if fields.len() != 1 {
+                        return error(400, "Expected single text field");
+                    }
+        
+                    let Some(text) =
+                        fields.get("text").and_then(Value::as_str)
+                    else {
+                        return error(400, "Expected text string");
+                    };
+        
+                    // len() 计算 UTF-8 字节数；空字符串允许上传。
+                    if text.len() > 65_536 {
+                        return error(413, "Text too long");
+                    }
+        
+                    // 保存拥有数据的 String；同名文本自动覆盖。
+                    user.texts.insert(
+                        name.to_owned(),
+                        text.to_owned(),
+                    );
+        
+                    return (200, json!({"data": null}));
+                }
+        
+                if method == "GET" {
+                    // 没有找到文本属于正常业务错误，不能使用 unwrap()。
+                    let Some(text) = user.texts.get(name) else {
+                        return error(404, "Text not found");
+                    };
+        
+                    // 在锁保护下构造拥有正文数据的 JSON 响应。
+                    return (200, json!({"data": text}));
+                }
+
             }
         }
         // 防御性兜底：路由表里声明了接口，却没有对应业务分支时返回 404。
