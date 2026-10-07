@@ -129,13 +129,17 @@ impl Service {
             let Some(fields) = body.as_object() else {
                 return error(400, "Expected JSON object");
             };
+            //对象只能有一个字段
+            if fields.len() != 1 {
+                return error(400, "Expected single field");
+            }
             //确认text字段必须为字符串
             let Some(text) = fields.get("text").and_then(Value::as_str) else {
                 return error(400, "Expected text");
             };
             //限制字数为65,536 字节
             if text.len() > 65536 {
-                return error(400, "Text too long");
+                return error(413, "Text too long");
             }
             //返回请求体
             return (200, json!({"data": text}));
