@@ -45,8 +45,6 @@ fn read_echo_text() -> io::Result<String> {
     }
     Ok(line.join("\n"))
 }
-
-
 // Box<dyn Error> 让 main 可以用 ? 传播来自输入、HTTP 客户端等不同类型的错误。
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -168,8 +166,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Please log in again.");
                 }
                 // 当前实现收到任何 401 都会清空令牌；成功退出登录也会清空。
-                if status == 401 
-                    || (command == "logout" || command == "delete-user" && status == 200) 
+                if status == 401
+                    || (command == "logout" || command == "delete-user" && status == 200)
                 {
                     token.clear();
                 }

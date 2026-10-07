@@ -7,6 +7,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::time::Duration;
 
+/// 验证请求携带令牌，非 JSON 错误响应仍保留 HTTP 状态码。
 #[test]
 fn sends_http_authorization_and_preserves_error_status() {
     // 端口 0 让系统分配空闲端口，测试不依赖预先运行的项目服务端。
@@ -51,7 +52,7 @@ fn sends_http_authorization_and_preserves_error_status() {
     peer.join().unwrap();
 }
 
-
+/// 验证空错误响应体不会丢失 HTTP 状态码。
 #[test]
 fn empty_error_body_keeps_status() {
     // 创建临时服务端，并取得它实际使用的地址。
@@ -88,8 +89,7 @@ fn empty_error_body_keeps_status() {
         .timeout(Duration::from_secs(3))
         .build()
         .unwrap();
-    let result = exchange(&client, &url, Method::GET, "/texts", "sample", None)
-        .unwrap();
+    let result = exchange(&client, &url, Method::GET, "/texts", "sample", None).unwrap();
 
     // 放在 exchange() 后面：检查客户端处理响应后的结果。
     assert_eq!(result, (401, json!({"message": ""})));
@@ -97,6 +97,7 @@ fn empty_error_body_keeps_status() {
     peer.join().unwrap();
 }
 
+/// 验证服务端不响应时客户端能在有限时间内返回超时错误。
 #[test]
 fn times_out_when_server_does_not_respond() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -135,24 +135,25 @@ fn http_input_and_routing() {
     );
 }
 
-/// 验证尚未实现的账号注销，以及已知路径上不支持的方法。
+/// 验证受保护删除接口要求登录，以及已知路径上不支持的方法。
 #[test]
 fn remaining_routes_and_unsupported_methods() {
     let client = Client::tracked(create_app()).unwrap();
     assert_eq!(
         client.delete("/users/me").dispatch().status(),
-        Status::NotFound
+        Status::Unauthorized
     );
-    // 详情路径已存在，本阶段尚未支持删除，所以返回 405。
+    // 删除文本已实现，但缺少令牌时不能访问。
     assert_eq!(
         client.delete("/texts/note").dispatch().status(),
-        Status::MethodNotAllowed
+        Status::Unauthorized
     );
     for path in [
         "/ping",
         "/users",
         "/sessions",
         "/sessions/current",
+        "/users/me",
         "/texts",
         "/echo",
         "/texts/note",
@@ -184,6 +185,66 @@ fn register_and_login(client: &Client, username: &str) -> String {
     assert_eq!(login.status(), Status::Ok);
     let login = login.into_json::<Value>().unwrap();
     format!("Bearer {}", login["data"]["token"].as_str().unwrap())
+}
+
+/// 从 HTTP 入口验证注销响应、旧令牌撤销和同名重注册后的空文本列表。
+#[test]
+fn http_account_deletion_and_reregistration() {
+    let client = Client::tracked(create_app()).unwrap();
+    let old = register_and_login(&client, "alice");
+    assert_eq!(
+        client
+            .put("/texts/note")
+            .header(ContentType::JSON)
+            .header(Header::new("Authorization", old.clone()))
+            .body(json!({"text": "旧账号正文"}).to_string())
+            .dispatch()
+            .status(),
+        Status::Ok
+    );
+    let deletion = client
+        .delete("/users/me")
+        .header(Header::new("Authorization", old.clone()))
+        .dispatch();
+    assert_eq!(deletion.status(), Status::Ok);
+    assert_eq!(deletion.content_type(), Some(ContentType::JSON));
+    assert_eq!(
+        deletion.into_json::<Value>().unwrap(),
+        json!({"data": null})
+    );
+    for (method, path) in [(Method::Get, "/texts"), (Method::Delete, "/users/me")] {
+        assert_eq!(
+            client
+                .req(method, path)
+                .header(Header::new("Authorization", old.clone()))
+                .dispatch()
+                .status(),
+            Status::Unauthorized
+        );
+    }
+    let current = register_and_login(&client, "alice");
+    let list = client
+        .get("/texts")
+        .header(Header::new("Authorization", current.clone()))
+        .dispatch();
+    assert_eq!(list.status(), Status::Ok);
+    assert_eq!(list.into_json::<Value>().unwrap(), json!({"data": []}));
+    assert_eq!(
+        client
+            .get("/texts/note")
+            .header(Header::new("Authorization", current))
+            .dispatch()
+            .status(),
+        Status::NotFound
+    );
+    assert_eq!(
+        client
+            .delete("/users/me")
+            .header(Header::new("Authorization", old))
+            .dispatch()
+            .status(),
+        Status::Unauthorized
+    );
 }
 
 /// 走完整 HTTP 处理链验证公开回显、Unicode 和 JSON 响应封装。

@@ -74,6 +74,116 @@ fn register_and_login(service: &Service, username: &str) -> String {
     format!("Bearer {}", login["data"]["token"].as_str().unwrap())
 }
 
+/// 注销撤销旧身份和文本，同名重注册保持空状态且不影响其他用户。
+#[test]
+fn account_deletion_revokes_identity_and_isolates_reregistration() {
+    let service = Service::default();
+    let old = register_and_login(&service, "alice");
+    let bob = register_and_login(&service, "bob");
+    for authorization in [&old, &bob] {
+        assert_eq!(
+            service
+                .handle(
+                    "PUT",
+                    "/texts/note",
+                    &json!({"text": "原文"}),
+                    authorization
+                )
+                .0,
+            200
+        );
+    }
+    for authorization in ["", "Bearer invalid"] {
+        assert_eq!(
+            service
+                .handle("DELETE", "/users/me", &Value::Null, authorization)
+                .0,
+            401
+        );
+    }
+    assert_eq!(
+        service.handle("DELETE", "/users/me", &Value::Null, &old),
+        (200, json!({"data": null}))
+    );
+    assert!(!service.users.lock().unwrap().contains_key("alice"));
+    for (method, path, body) in [
+        ("GET", "/texts", Value::Null),
+        ("GET", "/texts/note", Value::Null),
+        ("PUT", "/texts/note", json!({"text": "旧身份不能写入"})),
+        ("DELETE", "/texts/note", Value::Null),
+        ("DELETE", "/sessions/current", Value::Null),
+        ("DELETE", "/users/me", Value::Null),
+    ] {
+        assert_eq!(service.handle(method, path, &body, &old).0, 401);
+    }
+    // 使用完全相同的用户名和密码，也不能继承旧数据或恢复旧令牌。
+    let current = register_and_login(&service, "alice");
+    assert_eq!(
+        service.handle("DELETE", "/users/me", &Value::Null, &old).0,
+        401
+    );
+    assert_eq!(
+        service.handle("GET", "/texts", &Value::Null, &current),
+        (200, json!({"data": []}))
+    );
+    assert_eq!(
+        service
+            .handle("GET", "/texts/note", &Value::Null, &current)
+            .0,
+        404
+    );
+    assert_eq!(
+        service.handle("GET", "/texts/note", &Value::Null, &bob),
+        (200, json!({"data": "原文"}))
+    );
+}
+
+/// 上传和注销竞争时，最终旧账号消失，同名新账号没有旧请求写入的文本。
+#[test]
+fn concurrent_upload_and_deletion_leave_no_old_data() {
+    use std::sync::{Arc, Barrier};
+
+    let service = Arc::new(Service::default());
+    let old = register_and_login(&service, "alice");
+    let start = Arc::new(Barrier::new(3));
+    let upload = {
+        let service = Arc::clone(&service);
+        let start = Arc::clone(&start);
+        let old = old.clone();
+        std::thread::spawn(move || {
+            start.wait();
+            service
+                .handle("PUT", "/texts/note", &json!({"text": "并发正文"}), &old)
+                .0
+        })
+    };
+    let deletion = {
+        let service = Arc::clone(&service);
+        let start = Arc::clone(&start);
+        let old = old.clone();
+        std::thread::spawn(move || {
+            start.wait();
+            service.handle("DELETE", "/users/me", &Value::Null, &old)
+        })
+    };
+    start.wait();
+    let upload_status = upload.join().unwrap();
+    assert!(matches!(upload_status, 200 | 401));
+    assert_eq!(deletion.join().unwrap(), (200, json!({"data": null})));
+    assert!(!service.users.lock().unwrap().contains_key("alice"));
+    let current = register_and_login(&service, "alice");
+    assert_eq!(
+        service
+            .handle("PUT", "/texts/note", &json!({"text": "迟到的旧请求"}), &old)
+            .0,
+        401
+    );
+    assert_eq!(
+        service.handle("GET", "/texts", &Value::Null, &current),
+        (200, json!({"data": []}))
+    );
+}
+
 /// 回显必须保留空正文、Unicode、空白和换行，并按 UTF-8 字节限制大小。
 #[test]
 fn echo_preserves_text_and_checks_utf8_limit() {
